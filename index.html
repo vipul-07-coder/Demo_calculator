@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Simple Calculator</title>
+  <style>
+    :root{font-family:system-ui,-apple-system,Segoe UI,Roboto,'Helvetica Neue',Arial;}
+    body{display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:linear-gradient(135deg,#e6f0ff,#f7f9fb);}
+    .calc{width:320px;background:#fff;border-radius:16px;box-shadow:0 10px 30px rgba(15,30,60,.12);padding:18px}
+    .display{height:64px;background:#0f1724;color:#e6eef8;border-radius:10px;padding:10px 14px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:center;align-items:flex-end;font-size:20px;overflow:hidden}
+    .expression{color:rgba(230,238,248,.7);font-size:14px}
+    .result{font-weight:700;font-size:22px;line-height:1}
+    .keys{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:14px}
+    button{height:56px;border-radius:10px;border:0;font-size:18px;cursor:pointer;outline:none}
+    .btn-light{background:#f3f6fb}
+    .btn-op{background:#0b79ff;color:#fff}
+    .btn-eq{background:#0a62d8;color:#fff;grid-column:span 2}
+    .btn-wide{grid-column:span 2}
+    button:active{transform:translateY(1px)}
+    .small{font-size:14px}
+  </style>
+</head>
+<body>
+  <main class="calc" role="application" aria-label="Calculator">
+    <div class="display" aria-live="polite">
+      <div id="expression" class="expression">0</div>
+      <div id="result" class="result">0</div>
+    </div>
+
+    <div class="keys">
+      <button class="btn-light small" data-action="clear">C</button>
+      <button class="btn-light small" data-action="back">⌫</button>
+      <button class="btn-light small" data-action="percent">%</button>
+      <button class="btn-op" data-value="/">÷</button>
+
+      <button class="btn-light" data-value="7">7</button>
+      <button class="btn-light" data-value="8">8</button>
+      <button class="btn-light" data-value="9">9</button>
+      <button class="btn-op" data-value="*">×</button>
+
+      <button class="btn-light" data-value="4">4</button>
+      <button class="btn-light" data-value="5">5</button>
+      <button class="btn-light" data-value="6">6</button>
+      <button class="btn-op" data-value="-">−</button>
+
+      <button class="btn-light" data-value="1">1</button>
+      <button class="btn-light" data-value="2">2</button>
+      <button class="btn-light" data-value="3">3</button>
+      <button class="btn-op" data-value="+">+</button>
+
+      <button class="btn-light btn-wide" data-value="0">0</button>
+      <button class="btn-light" data-value=".">.</button>
+      <button class="btn-eq" data-action="equals">=</button>
+    </div>
+  </main>
+
+  <script>
+    (function(){
+      const expEl = document.getElementById('expression');
+      const resEl = document.getElementById('result');
+      let expression = '';
+
+      function updateDisplay(){
+        expEl.textContent = expression || '0';
+        try{
+          const sanitized = sanitizeForEval(expression);
+          if(sanitized.trim() === ''){ resEl.textContent = '0'; return }
+          const val = eval(sanitized);
+          resEl.textContent = (val === undefined || Number.isNaN(val)) ? 'Error' : String(val);
+        }catch(e){ resEl.textContent = 'Error' }
+      }
+
+      function sanitizeForEval(expr){
+        // allow digits, operators, decimal point and parentheses
+        // replace unicode operator symbols with JS operators
+        return expr.replace(/×/g,'*').replace(/÷/g,'/').replace(/−/g,'-')
+                   // remove any characters that are not allowed
+                   .replace(/[^0-9+\-*/().% ]/g,'');
+      }
+
+      function append(value){
+        // prevent multiple leading zeros
+        if(value === '.' && /\.[0-9]*$/.test(expression)) return;
+        // simple rule: don't allow two operators in a row (except minus for negative)
+        if(/[+\-*/]/.test(value)){
+          if(expression === '' && value !== '-') return; // can't start with +*/
+          if(/[+\-*/]$/.test(expression)){
+            // replace last operator with new one
+            expression = expression.slice(0,-1) + value;
+            updateDisplay();
+            return;
+          }
+        }
+        expression += value;
+        updateDisplay();
+      }
+
+      function doBack(){
+        expression = expression.slice(0,-1);
+        updateDisplay();
+      }
+
+      function doClear(){ expression = ''; updateDisplay(); }
+
+      function doPercent(){
+        // transform the last number into (lastNumber/100)
+        const m = expression.match(/(\d*\.?\d+)$/);
+        if(!m) return;
+        const last = m[1];
+        const start = m.index;
+        const replaced = '(' + last + '/100)';
+        expression = expression.slice(0,start) + replaced;
+        updateDisplay();
+      }
+
+      function doEquals(){
+        try{
+          const sanitized = sanitizeForEval(expression);
+          // quick safety: don't allow double dots or empty
+          if(!sanitized) return;
+          let value = eval(sanitized);
+          if(typeof value === 'number' && !Number.isFinite(value)) throw new Error('Infinity');
+          expression = String(value);
+          updateDisplay();
+        }catch(e){
+          resEl.textContent = 'Error';
+        }
+      }
+
+      document.querySelectorAll('button').forEach(btn=>{
+        btn.addEventListener('click',()=>{
+          const action = btn.dataset.action;
+          const value = btn.dataset.value;
+          if(action === 'clear') return doClear();
+          if(action === 'back') return doBack();
+          if(action === 'percent') return doPercent();
+          if(action === 'equals') return doEquals();
+          if(value) return append(value);
+        });
+      });
+
+      // keyboard support
+      window.addEventListener('keydown', (e)=>{
+        if(e.key >= '0' && e.key <= '9') { append(e.key); e.preventDefault(); return }
+        if(['+','-','*','/','(',')','.'].includes(e.key)){ append(e.key); e.preventDefault(); return }
+        if(e.key === 'Enter') { doEquals(); e.preventDefault(); return }
+        if(e.key === 'Backspace') { doBack(); e.preventDefault(); return }
+        if(e.key.toLowerCase() === 'c') { doClear(); e.preventDefault(); return }
+        if(e.key === '%') { doPercent(); e.preventDefault(); return }
+      });
+
+      // initialize
+      updateDisplay();
+    })();
+  </script>
+</body>
+</html>
